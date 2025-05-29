@@ -71,5 +71,5 @@ class CacheManager:
     def get_obj(self, file_name: str, obj_name: str, version: Optional[str] = None):
         obj_key = f'{file_name}/{obj_name}'
         if obj_key not in self._cache:
-            self._load_class(file_name, obj_name, version)
+            self._load_obj(file_name, obj_name, version)
         return self._cache[obj_key]
