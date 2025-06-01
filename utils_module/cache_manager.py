@@ -73,3 +73,6 @@ class CacheManager:
         if obj_key not in self._cache:
             self._load_obj(file_name, obj_name, version)
         return self._cache[obj_key]
+
+    def download_file(self, file_name: str, version: Optional[str] = None):
+        self._download_from_s3(file_name, version)
