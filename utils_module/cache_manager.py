@@ -30,7 +30,7 @@ class CacheManager:
             f.write(version)
 
     def _download_from_s3(self, file_name: str, version: Optional[str] = None) -> Tuple[str, str]:
-        local_path = os.path.join(self.file_cache_dir, file_name)
+        local_path = os.path.join(self.file_cache_dir, file_name.lstrip('/'))
         remote_version = self._get_remote_version(file_name)
         cached_version = self._get_cached_version(file_name)
         if version is None and cached_version == remote_version:
@@ -43,6 +43,7 @@ class CacheManager:
             extra_args['VersionId'] = remote_version
 
         try:
+            os.makedirs(os.path.dirname(local_path), exist_ok=True)
             self.s3_client.download_file(self.bucket, file_name, local_path, ExtraArgs=extra_args)
             self._save_cached_version(file_name, version or remote_version)
             return local_path, version or remote_version
