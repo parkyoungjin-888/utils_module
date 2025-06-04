@@ -24,8 +24,8 @@ class CustomBaseModel(BaseModel):
                     raise ValueError(f'Field {field_name} expects a float value, got {value}')
         return values
 
-    def dict(self, *args, stringify=False, **kwargs):
-        result = super().dict(*args, **kwargs)
+    def model_dump(self, *args, stringify=False, **kwargs):
+        result = super().model_dump(*args, **kwargs)
         if stringify:
             for key, value in result.items():
                 if key == 'id' or key == '_id':
