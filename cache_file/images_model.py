@@ -24,13 +24,3 @@ class ProjectImage(CustomBaseModel):
     name: str
     event_datetime: str | datetime
     img_path: str
-
-    @validator('id', pre=False)
-    def convert_object_id2str(cls, value):
-        return str(value)
-
-    @validator('event_datetime', pre=False)
-    def convert_datetime_id2str(cls, value: str | datetime):
-        if isinstance(value, datetime):
-            return value.strftime('%Y-%m-%d %H:%M:%S')
-        return value

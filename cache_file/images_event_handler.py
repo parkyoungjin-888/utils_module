@@ -35,6 +35,8 @@ class ImagesEventHandler:
         elif before_doc.get('img_path'):
             s3_res = self.s3_client.delete_object(Bucket='images', Key=before_doc['img_path'])
             self.logger.info({'response': s3_res})
+            s3_res = self.s3_client.delete_object(Bucket='resultimages', Key=before_doc['img_path'])
+            self.logger.info({'response': s3_res})
 
     def process_replace(self, event: dict):
         pass

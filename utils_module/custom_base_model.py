@@ -1,4 +1,5 @@
 from pydantic import BaseModel, ConfigDict, root_validator
+from datetime import datetime
 
 
 class CustomBaseModel(BaseModel):
@@ -22,3 +23,14 @@ class CustomBaseModel(BaseModel):
                 except ValueError:
                     raise ValueError(f'Field {field_name} expects a float value, got {value}')
         return values
+
+    def dict(self, *args, stringify=False, **kwargs):
+        result = super().dict(*args, **kwargs)
+        if stringify:
+            for key, value in result.items():
+                if key == 'id' or key == '_id':
+                    result[key] = str(value)
+                elif key.endswith('_datetime') and isinstance(value, datetime):
+                    result[key] = value.strftime('%Y-%m-%d %H:%M:%S')
+
+        return result

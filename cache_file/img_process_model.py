@@ -23,7 +23,3 @@ class ProjectImgProcess(CustomBaseModel):
     name: str
     img_collection: Optional[str | None] = None
     category: Optional[AnalysisCategory | None] = None
-
-    @validator('id', pre=False)
-    def convert_object_id2str(cls, value):
-        return str(value)
