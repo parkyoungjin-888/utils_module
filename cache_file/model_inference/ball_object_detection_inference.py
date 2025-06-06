@@ -4,6 +4,9 @@ import numpy as np
 import onnxruntime as ort
 from typing import Type
 from pydantic import BaseModel
+import boto3
+from io import BytesIO
+from mongodb_module.beanie_client import CollectionClient
 
 
 def box_cxcywh_to_xyxy(box_array):
@@ -26,22 +29,26 @@ def rescale_bboxes(out_bbox, size):
 
 
 class ModelInference:
-    def __init__(self, data_model: Type[BaseModel], onnx_model_path: str):
+    def __init__(self, data_model: Type[BaseModel], onnx_model_path: str,
+                 s3_client: boto3.client, collection_client: CollectionClient = None):
         self.data_model = data_model
         self.input_size = (640, 480)
         session_options = ort.SessionOptions()
         session_options.intra_op_num_threads = 8
         session_options.inter_op_num_threads = 8
         providers = ['CUDAExecutionProvider']
-        print("Available providers:", ort.get_available_providers())
+        # print("Available providers:", ort.get_available_providers())
         self.session = ort.InferenceSession(onnx_model_path, sess_options=session_options, providers=providers)
         self.input_name = self.session.get_inputs()[0].name
 
         self.mean = [0.485, 0.456, 0.406]
         self.std = [0.229, 0.224, 0.225]
 
-        print("Execution Providers:", self.session.get_providers())
-        print(ort.get_device())
+        # print("Execution Providers:", self.session.get_providers())
+        # print(ort.get_device())
+
+        self.s3_client = s3_client
+        self.collection_client = collection_client
 
     def preprocess_img(self, img):
         crop_img = img[120:600, 320:960]
@@ -71,10 +78,12 @@ class ModelInference:
         predicted_boxes = np.squeeze(outputs[1])
         max_boxes = [predicted_boxes[idx] for idx in zip(*indices)]
 
+        obj_box = []
         if len(max_boxes) > 0:
             rescale_max_boxes = rescale_bboxes(max_boxes, self.input_size)
             for label, box in zip(max_label, rescale_max_boxes):
                 x_1, y_1, x_2, y_2 = (box + [320, 120, 320, 120]).astype(np.int32)
+                obj_box.append([[x_1, y_1], [x_2, y_2], label])
                 cv2.rectangle(img_data['img'], (320, 120), (960, 600), (0, 0, 255), 1)
                 cv2.rectangle(img_data['img'], (x_1, y_1), (x_2, y_2), (0, 255, 0), 1)
                 cv2.putText(img_data['img'], str(label), (x_1, y_1), cv2.FONT_HERSHEY_PLAIN, 1, (0, 0, 255), 1)
@@ -82,4 +91,14 @@ class ModelInference:
             cv2.putText(img_data['img'], tact, (50, 50), cv2.FONT_HERSHEY_PLAIN, 1, (0, 0, 255), 1)
             # cv2.imshow('img', img_data['img'])
             # cv2.waitKey(1)
-            cv2.imwrite('./result/re' + img_data['name'], img_data['img'])
+            # cv2.imwrite('./result/re' + img_data['name'], img_data['img'])
+
+            collection_req = {'query': {'name': img_data['name']}, 'set': {'result.obj_box': obj_box}, 'upsert': True}
+            collection_res = self.collection_client.update_one(collection_req)
+            print(collection_res)
+
+            _, jpeg_image = cv2.imencode('.jpg', img_data['img'])
+            image_bytes = BytesIO(jpeg_image.tobytes())
+            img_path = f"{img_data['device_id']}/{img_data['name']}"
+            s3_res = self.s3_client.upload_fileobj(image_bytes, 'resultimages', img_path)
+            print(s3_res)

@@ -16,6 +16,7 @@ class Image(CustomBaseModel):
     width: int
     height: int
     img_path: str
+    result: Optional[dict] = {}
 
 
 class ProjectImage(CustomBaseModel):
