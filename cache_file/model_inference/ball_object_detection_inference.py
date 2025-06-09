@@ -36,7 +36,7 @@ class ModelInference:
         session_options = ort.SessionOptions()
         session_options.intra_op_num_threads = 8
         session_options.inter_op_num_threads = 8
-        providers = ['CUDAExecutionProvider']
+        providers = ['CUDAExecutionProvider', 'CPUExecutionProvider']
         # print("Available providers:", ort.get_available_providers())
         self.session = ort.InferenceSession(onnx_model_path, sess_options=session_options, providers=providers)
         self.input_name = self.session.get_inputs()[0].name
@@ -59,6 +59,11 @@ class ModelInference:
         return img_array.astype(np.float32)
 
     def run(self, messages: dict):
+        if messages is None:
+            return
+        elif messages.get('cam2') != 'cam2':
+            return
+
         start = time.time()
         img_data = self.data_model(**messages).get_dict_with_img_decoding()
         img_array = self.preprocess_img(img_data['img'])
