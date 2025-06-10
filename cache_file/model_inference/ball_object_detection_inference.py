@@ -7,6 +7,7 @@ from pydantic import BaseModel
 import boto3
 from io import BytesIO
 from mongodb_module.beanie_client import CollectionClient
+import asyncio
 
 
 def box_cxcywh_to_xyxy(box_array):
@@ -58,14 +59,14 @@ class ModelInference:
         img_array = np.expand_dims(img_array, axis=0)
         return img_array.astype(np.float32)
 
-    def run(self, messages: dict):
+    async def run(self, messages: dict):
         if messages is None:
             return
-        elif messages.get('cam2') != 'cam2':
+        elif messages.get('device_id') != 'cam2':
             return
 
         start = time.time()
-        img_data = self.data_model(**messages).get_dict_with_img_decoding()
+        img_data = self.data_model(**messages, stringify_extra_type=True).get_dict_with_img_decoding()
         img_array = self.preprocess_img(img_data['img'])
 
         outputs = self.session.run(None, {self.input_name: img_array})
@@ -88,7 +89,7 @@ class ModelInference:
             rescale_max_boxes = rescale_bboxes(max_boxes, self.input_size)
             for label, box in zip(max_label, rescale_max_boxes):
                 x_1, y_1, x_2, y_2 = (box + [320, 120, 320, 120]).astype(np.int32)
-                obj_box.append([[x_1, y_1], [x_2, y_2], label])
+                obj_box.append([[int(x_1), int(y_1)], [int(x_2), int(y_2)], int(label)])
                 cv2.rectangle(img_data['img'], (320, 120), (960, 600), (0, 0, 255), 1)
                 cv2.rectangle(img_data['img'], (x_1, y_1), (x_2, y_2), (0, 255, 0), 1)
                 cv2.putText(img_data['img'], str(label), (x_1, y_1), cv2.FONT_HERSHEY_PLAIN, 1, (0, 0, 255), 1)
@@ -99,7 +100,7 @@ class ModelInference:
             # cv2.imwrite('./result/re' + img_data['name'], img_data['img'])
 
             collection_req = {'query': {'name': img_data['name']}, 'set': {'result.obj_box': obj_box}, 'upsert': True}
-            collection_res = self.collection_client.update_one(collection_req)
+            collection_res = await self.collection_client.update_one(**collection_req)
             print(collection_res)
 
             _, jpeg_image = cv2.imencode('.jpg', img_data['img'])
