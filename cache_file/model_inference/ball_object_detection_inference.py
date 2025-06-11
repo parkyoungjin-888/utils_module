@@ -101,10 +101,10 @@ class ModelInference:
 
             collection_req = {'query': {'name': img_data['name']}, 'set': {'result.obj_box': obj_box}, 'upsert': True}
             collection_res = await self.collection_client.update_one(**collection_req)
-            print(collection_res)
+            # print(collection_res)
 
             _, jpeg_image = cv2.imencode('.jpg', img_data['img'])
             image_bytes = BytesIO(jpeg_image.tobytes())
             img_path = f"{img_data['device_id']}/{img_data['name']}"
             s3_res = self.s3_client.upload_fileobj(image_bytes, 'resultimages', img_path)
-            print(s3_res)
+            # print(s3_res)
