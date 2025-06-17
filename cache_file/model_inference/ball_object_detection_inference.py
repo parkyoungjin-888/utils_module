@@ -10,6 +10,7 @@ from config_module.config_singleton import ConfigSingleton
 from mongodb_module.beanie_client import CollectionClient
 from kafka_module.kafka_producer import KafkaProducerControl
 import asyncio
+from datetime import datetime, timezone
 
 
 def box_cxcywh_to_xyxy(box_array):
@@ -90,7 +91,8 @@ class ModelInference:
         predicted_boxes = np.squeeze(outputs[1])
         max_boxes = [predicted_boxes[idx] for idx in zip(*indices)]
 
-        obj_box = {}
+        event_datetime_str = datetime.fromtimestamp(img_data['timestamp'], tz=timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')
+        obj_box = {'name': img_data['name'], 'event_datetime_str': event_datetime_str}
         if len(max_boxes) > 0:
             i = 0
             rescale_max_boxes = rescale_bboxes(max_boxes, self.input_size)
