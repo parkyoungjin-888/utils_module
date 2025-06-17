@@ -105,6 +105,7 @@ class ModelInference:
                     f'dec_{i}_cx': int((x_1 + x_2) / 2),
                     f'dec_{i}_cy': int((y_1 + y_2) / 2),
                 })
+                i += 1
 
                 # cv2.rectangle(img_data['img'], (320, 120), (960, 600), (0, 0, 255), 1)
                 # cv2.rectangle(img_data['img'], (x_1, y_1), (x_2, y_2), (0, 255, 0), 1)
