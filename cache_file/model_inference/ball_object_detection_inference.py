@@ -6,7 +6,9 @@ from typing import Type
 from pydantic import BaseModel
 import boto3
 from io import BytesIO
+from config_module.config_singleton import ConfigSingleton
 from mongodb_module.beanie_client import CollectionClient
+from kafka_module.kafka_producer import KafkaProducerControl
 import asyncio
 
 
@@ -31,7 +33,9 @@ def rescale_bboxes(out_bbox, size):
 
 class ModelInference:
     def __init__(self, data_model: Type[BaseModel], onnx_model_path: str,
-                 s3_client: boto3.client, collection_client: CollectionClient = None):
+                 collection_client: CollectionClient = None):
+        config = ConfigSingleton()
+
         self.data_model = data_model
         self.input_size = (640, 480)
         session_options = ort.SessionOptions()
@@ -48,8 +52,10 @@ class ModelInference:
         # print("Execution Providers:", self.session.get_providers())
         # print(ort.get_device())
 
-        self.s3_client = s3_client
+        # self.s3_client = s3_client
         self.collection_client = collection_client
+        kafka_server_urls = config.get_value('kafka').get('server_urls')
+        self.kafka_producer = KafkaProducerControl(server_urls=kafka_server_urls, topic='ImageResult')
 
     def preprocess_img(self, img):
         crop_img = img[120:600, 320:960]
@@ -84,17 +90,27 @@ class ModelInference:
         predicted_boxes = np.squeeze(outputs[1])
         max_boxes = [predicted_boxes[idx] for idx in zip(*indices)]
 
-        obj_box = []
+        obj_box = {}
         if len(max_boxes) > 0:
+            i = 0
             rescale_max_boxes = rescale_bboxes(max_boxes, self.input_size)
             for label, box in zip(max_label, rescale_max_boxes):
                 x_1, y_1, x_2, y_2 = (box + [320, 120, 320, 120]).astype(np.int32)
-                obj_box.append([[int(x_1), int(y_1)], [int(x_2), int(y_2)], int(label)])
-                cv2.rectangle(img_data['img'], (320, 120), (960, 600), (0, 0, 255), 1)
-                cv2.rectangle(img_data['img'], (x_1, y_1), (x_2, y_2), (0, 255, 0), 1)
-                cv2.putText(img_data['img'], str(label), (x_1, y_1), cv2.FONT_HERSHEY_PLAIN, 1, (0, 0, 255), 1)
-            tact = str(time.time() - start)
-            cv2.putText(img_data['img'], tact, (50, 50), cv2.FONT_HERSHEY_PLAIN, 1, (0, 0, 255), 1)
+                obj_box.update({
+                    f'dec_{i}_label': int(label),
+                    f'dec_{i}_x1': int(x_1),
+                    f'dec_{i}_y1': int(y_1),
+                    f'dec_{i}_x2': int(x_2),
+                    f'dec_{i}_y2': int(y_2),
+                    f'dec_{i}_cx': int((x_1 + x_2) / 2),
+                    f'dec_{i}_cy': int((y_1 + y_2) / 2),
+                })
+
+                # cv2.rectangle(img_data['img'], (320, 120), (960, 600), (0, 0, 255), 1)
+                # cv2.rectangle(img_data['img'], (x_1, y_1), (x_2, y_2), (0, 255, 0), 1)
+                # cv2.putText(img_data['img'], str(label), (x_1, y_1), cv2.FONT_HERSHEY_PLAIN, 1, (0, 0, 255), 1)
+            # tact = str(time.time() - start)
+            # cv2.putText(img_data['img'], tact, (50, 50), cv2.FONT_HERSHEY_PLAIN, 1, (0, 0, 255), 1)
             # cv2.imshow('img', img_data['img'])
             # cv2.waitKey(1)
             # cv2.imwrite('./result/re' + img_data['name'], img_data['img'])
@@ -103,8 +119,10 @@ class ModelInference:
             collection_res = await self.collection_client.update_one(**collection_req)
             # print(collection_res)
 
-            _, jpeg_image = cv2.imencode('.jpg', img_data['img'])
-            image_bytes = BytesIO(jpeg_image.tobytes())
-            img_path = f"{img_data['device_id']}/{img_data['name']}"
-            s3_res = self.s3_client.upload_fileobj(image_bytes, 'resultimages', img_path)
+            # _, jpeg_image = cv2.imencode('.jpg', img_data['img'])
+            # image_bytes = BytesIO(jpeg_image.tobytes())
+            # img_path = f"{img_data['device_id']}/{img_data['name']}"
+            # s3_res = self.s3_client.upload_fileobj(image_bytes, 'resultimages', img_path)
             # print(s3_res)
+
+            self.kafka_producer.send(obj_box)
