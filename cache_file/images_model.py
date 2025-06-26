@@ -8,20 +8,21 @@ from utils_module.custom_base_model import CustomBaseModel
 
 
 class Image(CustomBaseModel):
-    device_id: str
+    device_id: str = None
     name: str
-    timestamp: float
-    event_datetime: datetime
-    process_datetime: datetime
-    width: int
-    height: int
-    img_path: str
+    timestamp: float = None
+    event_datetime: datetime = None
+    process_datetime: datetime = None
+    width: int = None
+    height: int = None
+    img_path: str = None
     result: Optional[dict] = {}
+    updated_datetime: datetime = None
 
 
 class ProjectImage(CustomBaseModel):
     id: PydanticObjectId = Field(alias='_id')
-    device_id: str
+    device_id: str = None
     name: str
-    event_datetime: str | datetime
-    img_path: str
+    event_datetime: str | datetime = None
+    img_path: str = None

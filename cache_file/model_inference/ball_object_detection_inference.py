@@ -91,8 +91,9 @@ class ModelInference:
         predicted_boxes = np.squeeze(outputs[1])
         max_boxes = [predicted_boxes[idx] for idx in zip(*indices)]
 
-        event_datetime_str = datetime.fromtimestamp(img_data['timestamp'], tz=timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')
-        obj_box = {'name': img_data['name'], 'event_datetime_str': event_datetime_str}
+        # event_datetime_str = datetime.fromtimestamp(img_data['timestamp'], tz=timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')
+        # obj_box = {'name': img_data['name'], 'event_datetime_str': event_datetime_str}
+        obj_box = {}
         if len(max_boxes) > 0:
             i = 0
             rescale_max_boxes = rescale_bboxes(max_boxes, self.input_size)
@@ -118,7 +119,13 @@ class ModelInference:
             # cv2.waitKey(1)
             # cv2.imwrite('./result/re' + img_data['name'], img_data['img'])
 
-            collection_req = {'query': {'name': img_data['name']}, 'set': {'result.obj_box': obj_box}, 'upsert': True}
+            collection_req = {'query': {'name': img_data['name']},
+                              'set': {
+                                  'name': img_data['name'],
+                                  'result.obj_box': obj_box,
+                                  'updated_datetime': datetime.now(tz=timezone.utc)
+                              },
+                              'upsert': True}
             collection_res = await self.collection_client.update_one(**collection_req)
             # print(collection_res)
 
