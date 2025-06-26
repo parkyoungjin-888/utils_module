@@ -84,7 +84,7 @@ class ModelInference:
         predicted_boxes = np.squeeze(outputs[1])
         max_boxes = [predicted_boxes[idx] for idx in zip(*indices)]
 
-        obj_box = {'inference_datetime': datetime.now(tz=timezone.utc)}
+        obj_box = {}
         if len(max_boxes) > 0:
             i = 0
             rescale_max_boxes = rescale_bboxes(max_boxes, self.input_size)
@@ -105,10 +105,12 @@ class ModelInference:
                               'set': {
                                   'name': img_data['name'],
                                   'result.obj_box': obj_box,
-                                  'updated_datetime': datetime.now(tz=timezone.utc)
+                                  'updated_datetime': datetime.now(tz=timezone.utc).strftime('%Y-%m-%d %H:%M:%S')
                               },
                               'upsert': True}
             collection_res = await self.collection_client.update_one(**collection_req)
 
-            producing_payload = {'name': img_data['name'], **obj_box}
+            str_format = '%Y-%m-%dT%H:%M:%SZ'
+            event_datetime_str = datetime.fromtimestamp(img_data['timestamp'], tz=timezone.utc).strftime(str_format)
+            producing_payload = {'name': img_data['name'], 'event_datetime_str': event_datetime_str, **obj_box}
             self.kafka_producer.send(producing_payload)
