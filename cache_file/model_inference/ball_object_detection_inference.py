@@ -1,15 +1,10 @@
-import time
-import cv2
 import numpy as np
 import onnxruntime as ort
 from typing import Type
 from pydantic import BaseModel
-import boto3
-from io import BytesIO
 from config_module.config_singleton import ConfigSingleton
 from mongodb_module.beanie_client import CollectionClient
 from kafka_module.kafka_producer import KafkaProducerControl
-import asyncio
 from datetime import datetime, timezone
 
 
@@ -53,7 +48,6 @@ class ModelInference:
         # print("Execution Providers:", self.session.get_providers())
         # print(ort.get_device())
 
-        # self.s3_client = s3_client
         self.collection_client = collection_client
         kafka_server_urls = config.get_value('kafka').get('server_urls')
         self.kafka_producer = KafkaProducerControl(server_urls=kafka_server_urls, topic='ImageResult')
@@ -72,7 +66,6 @@ class ModelInference:
         elif messages.get('device_id') != 'cam2':
             return
 
-        start = time.time()
         img_data = self.data_model(**messages, stringify_extra_type=True).get_dict_with_img_decoding()
         img_array = self.preprocess_img(img_data['img'])
 
@@ -91,9 +84,7 @@ class ModelInference:
         predicted_boxes = np.squeeze(outputs[1])
         max_boxes = [predicted_boxes[idx] for idx in zip(*indices)]
 
-        # event_datetime_str = datetime.fromtimestamp(img_data['timestamp'], tz=timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')
-        # obj_box = {'name': img_data['name'], 'event_datetime_str': event_datetime_str}
-        obj_box = {}
+        obj_box = {'inference_datetime': datetime.now(tz=timezone.utc)}
         if len(max_boxes) > 0:
             i = 0
             rescale_max_boxes = rescale_bboxes(max_boxes, self.input_size)
@@ -110,15 +101,6 @@ class ModelInference:
                 })
                 i += 1
 
-                # cv2.rectangle(img_data['img'], (320, 120), (960, 600), (0, 0, 255), 1)
-                # cv2.rectangle(img_data['img'], (x_1, y_1), (x_2, y_2), (0, 255, 0), 1)
-                # cv2.putText(img_data['img'], str(label), (x_1, y_1), cv2.FONT_HERSHEY_PLAIN, 1, (0, 0, 255), 1)
-            # tact = str(time.time() - start)
-            # cv2.putText(img_data['img'], tact, (50, 50), cv2.FONT_HERSHEY_PLAIN, 1, (0, 0, 255), 1)
-            # cv2.imshow('img', img_data['img'])
-            # cv2.waitKey(1)
-            # cv2.imwrite('./result/re' + img_data['name'], img_data['img'])
-
             collection_req = {'query': {'name': img_data['name']},
                               'set': {
                                   'name': img_data['name'],
@@ -127,12 +109,6 @@ class ModelInference:
                               },
                               'upsert': True}
             collection_res = await self.collection_client.update_one(**collection_req)
-            # print(collection_res)
 
-            # _, jpeg_image = cv2.imencode('.jpg', img_data['img'])
-            # image_bytes = BytesIO(jpeg_image.tobytes())
-            # img_path = f"{img_data['device_id']}/{img_data['name']}"
-            # s3_res = self.s3_client.upload_fileobj(image_bytes, 'resultimages', img_path)
-            # print(s3_res)
-
-            self.kafka_producer.send(obj_box)
+            producing_payload = {'name': img_data['name'], **obj_box}
+            self.kafka_producer.send(producing_payload)
